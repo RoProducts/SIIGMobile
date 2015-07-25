@@ -17,6 +17,7 @@ import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v4.widget.SimpleCursorAdapter;
 import android.support.v7.app.ActionBar;
+import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -30,7 +31,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.newrelic.agent.android.NewRelic;
 import com.squareup.okhttp.Headers;
 
 import org.mapsforge.android.maps.MapView;
@@ -72,7 +72,6 @@ import it.geosolutions.android.siigmobile.legend.LegendAdapter;
 import it.geosolutions.android.siigmobile.spatialite.DeleteUnsavedResultsTask;
 import it.geosolutions.android.siigmobile.spatialite.SpatialiteUtils;
 import jsqlite.Database;
-import it.geosolutions.android.siigmobile.legend.LegendAdapter;
 
 public class MainActivity extends MapActivityBase
         implements NavigationDrawerFragment.NavigationDrawerCallbacks {
@@ -119,6 +118,8 @@ public class MainActivity extends MapActivityBase
     private BoundingBox geoCodingBoundingBox;
     private Marker geoCodingMarker;
 
+    private Toolbar mToolbar;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -134,6 +135,39 @@ public class MainActivity extends MapActivityBase
 
         setContentView(R.layout.activity_main);
 
+        mToolbar = (Toolbar) findViewById(R.id.m_toolbar);
+        setSupportActionBar(mToolbar);
+
+        mToolbar.setTitleTextColor(getResources().getColor(R.color.white));
+
+        // Inflate a menu to be displayed in the toolbar
+        mToolbar.inflateMenu(R.menu.main);
+        mToolbar.setOnMenuItemClickListener(new Toolbar.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+
+                int id = item.getItemId();
+
+                if (id == R.id.action_save) {
+
+                    showEditElaborationTitleAndDescriptionDialog();
+                    return true;
+                } else if (id == R.id.action_clear){
+
+                    if(usePIS){
+                        usePIS = false;
+                        currentStyle = Config.DEFAULT_STYLE;
+                        mNavigationDrawerFragment.setEntries(getResources().getStringArray(R.array.drawer_items));
+                    }
+                    clearMenu();
+
+                    loadDBLayers(null);
+                    return true;
+                }
+                return false;
+            }
+        });
+
         mNavigationDrawerFragment = (NavigationDrawerFragment)
                 getSupportFragmentManager().findFragmentById(R.id.navigation_drawer);
         mTitle = getTitle();
@@ -142,6 +176,11 @@ public class MainActivity extends MapActivityBase
         mNavigationDrawerFragment.setUp(
                 R.id.navigation_drawer,
                 (DrawerLayout) findViewById(R.id.drawer_layout));
+
+        if(getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setHomeButtonEnabled(true);
+        }
 
         mapView =  (AdvancedMapView) findViewById(R.id.advancedMapView);
 
@@ -199,6 +238,13 @@ public class MainActivity extends MapActivityBase
         //select here the geocoder implementation
         mGeoCoder = new NominatimGeoCoder();
 
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        //ToolbarColorizeHelper.colorizeToolbar(mToolbar,getResources().getColor(R.color.white),this);
     }
 
     private void setupMap() {
@@ -594,17 +640,48 @@ public class MainActivity extends MapActivityBase
             final MenuItem search = menu.findItem(R.id.action_search);
             final GeoCodingSearchView geoCodingSearchView = (GeoCodingSearchView) MenuItemCompat.getActionView(search);
 
+            EditText ed = (EditText) geoCodingSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
+            ed.setHintTextColor(getResources().getColor(R.color.toolbargrey));
+            ed.setTextColor(getResources().getColor(R.color.black));
+
+            //arrow in the toolbar
+
+            MenuItemCompat.setOnActionExpandListener(search, new MenuItemCompat.OnActionExpandListener() {
+                @Override
+                public boolean onMenuItemActionExpand(MenuItem item) {
+
+                    Log.i(TAG, "expand");
+                    mToolbar.setBackgroundColor(getResources().getColor(R.color.white));
+
+                    //ToolbarColorizeHelper.colorizeToolbar(mToolbar, getResources().getColor(R.color.black),MainActivity.this);
+
+                    return true;
+                }
+
+                @Override
+                public boolean onMenuItemActionCollapse(MenuItem item) {
+
+                    Log.i(TAG, "collapse");
+
+                    mToolbar.setBackgroundColor(getResources().getColor(R.color.primary));
+
+                    //ToolbarColorizeHelper.colorizeToolbar(mToolbar, getResources().getColor(R.color.white),MainActivity.this);
+
+                    return true;
+                }
+            });
+
             geoCodingSearchView.setSuggestionsAdapter(searchViewAdapter);
             geoCodingSearchView.setCallback(new GeoCodingSearchView.GeoCodingCallback() {
                 @Override
                 public void doQuery(String query) {
 
-                    if(Util.isOnline(getBaseContext())){
+                    if (Util.isOnline(getBaseContext())) {
 
                         populateAdapter(query);
 
-                    }else{
-                        Toast.makeText(getBaseContext(),getString(R.string.not_online),Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(getBaseContext(), getString(R.string.not_online), Toast.LENGTH_SHORT).show();
                     }
                 }
 
@@ -615,10 +692,10 @@ public class MainActivity extends MapActivityBase
                     cur.moveToPosition(position);
 
                     final String title = cur.getString(cur.getColumnIndex(Config.CURSOR_TITLE));
-                    final String lat   = cur.getString(cur.getColumnIndex(Config.CURSOR_LAT));
-                    final String lon   = cur.getString(cur.getColumnIndex(Config.CURSOR_LON));
+                    final String lat = cur.getString(cur.getColumnIndex(Config.CURSOR_LAT));
+                    final String lon = cur.getString(cur.getColumnIndex(Config.CURSOR_LON));
 
-                    if(BuildConfig.DEBUG) {
+                    if (BuildConfig.DEBUG) {
                         Log.i(TAG, "selected " + title + " lat : " + lat + " lon " + lon);
                     }
 
@@ -629,7 +706,7 @@ public class MainActivity extends MapActivityBase
 
                     try {
                         //if mapview covers, center on place, zoom in and collapse search view
-                        if( getGeoCodingBoundingBox().contains(p)) {
+                        if (getGeoCodingBoundingBox().contains(p)) {
 
                             createOrUpdateGeoCodingMarker(p);
 
@@ -654,10 +731,10 @@ public class MainActivity extends MapActivityBase
                                         }
                                     })
                                     .create();
-                             dialog.show();
+                            dialog.show();
                         }
-                    }catch(IllegalArgumentException e){
-                        Log.e(TAG," error checking the map views bounds, is no map file open ?",e);
+                    } catch (IllegalArgumentException e) {
+                        Log.e(TAG, " error checking the map views bounds, is no map file open ?", e);
                     }
                 }
             });
@@ -735,7 +812,7 @@ public class MainActivity extends MapActivityBase
         }
 
     }
-
+/*
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
@@ -764,7 +841,7 @@ public class MainActivity extends MapActivityBase
 
         return super.onOptionsItemSelected(item);
     }
-
+*/
     public void showEditElaborationTitleAndDescriptionDialog(){
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
